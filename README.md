@@ -1,4 +1,8 @@
-#cosmic
+#cosmic -- Java interface
+This is a fork of the Cosmic project. The purpose of this fork is to develop a Matlab <-> Java interface for Cosmic that will allow us to use our Java-based planning software to solve problems implemented by the Cosmic simulator.
+
+#cosmic -- Original
+
 A dynamic cascading outage simulator in power systems,
 developed by Jiajia Song and Eduardo Cotilla-Sanchez (Oregon
 State University), Paul Hines and Goodarz Ghanavati
