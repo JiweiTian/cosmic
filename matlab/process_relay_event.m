@@ -2,7 +2,8 @@ function [ ps ] = process_relay_event(t_event,relay_event,ps,opt)
 % usage: [ ps ] = process_relay_event(t_event,relay_event,ps,opt)
 % proess the relay event
 C           = psconstants;
-global t_delay t_prev_check
+% [20160126:hostetje] Globals moved to field of 'ps'.
+% global t_delay t_prev_check
 
 [relay_type,relay_location,relay_index] = get_relay_event_info(relay_event,ps);
 num_relay = size(relay_type,1);
@@ -40,8 +41,8 @@ for i = 1:num_relay
             if opt.verbose, fprintf('  t = %.4f: UVLS relay trip at bus %d...\n',t_event,relay_location(i)); end
             ps.relay(relay_index(i),C.re.tripped) = 1;
             glo_id = ps.relay(relay_index(i),C.re.id);
-            t_delay(glo_id) = opt.sim.uvls_tdelay_ini;
-            t_prev_check(glo_id) = NaN;
+            ps.t_delay(glo_id) = opt.sim.uvls_tdelay_ini;
+            ps.t_prev_check(glo_id) = NaN;
         end
 
     elseif relay_type(i) == C.relay.ufls
@@ -55,8 +56,8 @@ for i = 1:num_relay
             if opt.verbose, fprintf('  t = %.4f: UFLS relay trip at bus %d...\n',t_event,relay_location(i)); end
             ps.relay(relay_index(i),C.re.tripped) = 1;
             glo_id = ps.relay(relay_index(i),C.re.id);
-            t_delay(glo_id) = opt.sim.ufls_tdelay_ini;
-            t_prev_check(glo_id) = NaN;
+            ps.t_delay(glo_id) = opt.sim.ufls_tdelay_ini;
+            ps.t_prev_check(glo_id) = NaN;
         end
     end
 

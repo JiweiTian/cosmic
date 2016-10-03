@@ -57,20 +57,21 @@ ps = update_load_freq_source(ps);
 % initialize relays
 ps.relay                    = get_relays(ps,'all',opt);
 
-global t_delay t_prev_check dist2threshold state_a
+% global t_delay t_prev_check dist2threshold state_a
 n    = size(ps.bus,1);
 ng   = size(ps.mac,1);
 m    = size(ps.branch,1);
 n_sh = size(ps.shunt,1);
 ix   = get_indices(n,ng,m,n_sh,opt);
-t_delay = inf(size(ps.relay,1),1);
-t_delay([ix.re.uvls])= opt.sim.uvls_tdelay_ini;
-t_delay([ix.re.ufls])= opt.sim.ufls_tdelay_ini;
-t_delay([ix.re.dist])= opt.sim.dist_tdelay_ini;
-t_delay([ix.re.temp])= opt.sim.temp_tdelay_ini;
-t_prev_check = nan(size(ps.relay,1),1);
-dist2threshold = inf(size(ix.re.oc,2)*2,1);
-state_a = zeros(size(ix.re.oc,2)*2,1);
+% t_delay = inf(size(ps.relay,1),1);
+% t_delay([ix.re.uvls])= opt.sim.uvls_tdelay_ini;
+% t_delay([ix.re.ufls])= opt.sim.ufls_tdelay_ini;
+% t_delay([ix.re.dist])= opt.sim.dist_tdelay_ini;
+% t_delay([ix.re.temp])= opt.sim.temp_tdelay_ini;
+% t_prev_check = nan(size(ps.relay,1),1);
+% dist2threshold = inf(size(ix.re.oc,2)*2,1);
+% state_a = zeros(size(ix.re.oc,2)*2,1);
+ps = init_global( ps, ix, opt );
 
 %% build an event matrix with branch outages
 n_event = length(branch_outages)+2;

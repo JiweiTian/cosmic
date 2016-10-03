@@ -31,6 +31,11 @@ end
 % initialize the output
 E = zeros(n,n);
 
+% [hostetje] Single-bus case
+if n == 1
+    return
+end
+
 % pre-calculate the Jacobian
 if ~use_pf_jacobian
     Ibus = Ybus * V;

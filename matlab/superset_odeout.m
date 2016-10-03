@@ -15,6 +15,9 @@ nxsmac = 7;				% number of differential variables per machine
 buses1      = ismember(ps.bus(:,1),ps1.bus(:,1));       buses2  = ~buses1;
 gens1       = ismember(ps.gen(:,1),ps1.gen(:,1));       gens2   = ~gens1;
 shunts1     = ismember(ps.shunt(:,1),ps1.shunt(:,1));   shunts2 = ~shunts1;
+% [20160112:hostetje] Also copy branch data
+branches1   = ismember(ps.branch(:,C.br.id), ps1.branch(:,C.br.id));
+branches2   = ~branches1;
 relx_bu1    = ismember(ps.relay(:,C.re.bus_loc),ps1.relay(ps1.relay(:,C.re.bus_loc)~=0,C.re.bus_loc));
 relx_br1    = ismember(ps.relay(:,C.re.branch_loc),ps1.relay(ps1.relay(:,C.re.branch_loc)~=0,C.re.branch_loc));
 relx_ge1    = ismember(ps.relay(:,C.re.gen_loc),ps1.relay(ps1.relay(:,C.re.gen_loc)~=0,C.re.gen_loc));
@@ -38,6 +41,13 @@ ps.exc(gens1,C.ex.Efd:C.ex.E1)      = ps1.exc(:,C.ex.Efd:C.ex.E1);
 ps.exc(gens2,C.ex.Efd:C.ex.E1)      = ps2.exc(:,C.ex.Efd:C.ex.E1);
 ps.relay(relx1,C.re.setting1:C.re.timer_start) = ps1.relay(:,C.re.setting1:C.re.timer_start);
 ps.relay(relx2,C.re.setting1:C.re.timer_start) = ps2.relay(:,C.re.setting1:C.re.timer_start);
+% [20160112:hostetje] Also copy branch and shunt information
+ps.branch(ps.branch_i(ps1.branch(:,C.br.id)), C.br.var_idx) = ps1.branch(:, C.br.var_idx);
+ps.branch(ps.branch_i(ps2.branch(:,C.br.id)), C.br.var_idx) = ps2.branch(:, C.br.var_idx);
+ps.shunt(ps.shunt_i(ps1.shunt(:,C.sh.id)), C.sh.var_idx) = ps1.shunt(:, C.sh.var_idx);
+ps.shunt(ps.shunt_i(ps2.shunt(:,C.sh.id)), C.sh.var_idx) = ps2.shunt(:, C.sh.var_idx);
+ps.blackout = ps1.blackout && ps2.blackout;
+% [/20160112:hostetje]
 
 % synchronize time vectors from the islands by uniform resampling at PMU time
 if all(isnan(X1(:)))
@@ -168,3 +178,26 @@ end
 
 % merge event record
 ps.event_record = unique([ps.event_record; ps1.event_record; ps2.event_record],'rows');
+
+%% Merge relays
+% Merge "global" relay state variables
+ps1_relays = ps1.relay(:, C.re.id);
+ps2_relays = ps2.relay(:, C.re.id);
+ps.t_delay( ps1_relays )        = ps1.t_delay( ps1_relays );
+ps.t_delay( ps2_relays )        = ps2.t_delay( ps2_relays );
+ps.t_prev_check( ps1_relays )   = ps1.t_prev_check( ps1_relays );
+ps.t_prev_check( ps2_relays )   = ps2.t_prev_check( ps2_relays );
+% These contain oc/temp relays only so we need to exclude other relay IDs
+ps1_d2t = ps1_relays(ps1_relays <= size(ps.dist2threshold, 1));
+ps2_d2t = ps2_relays(ps2_relays <= size(ps.dist2threshold, 1));
+ps.dist2threshold( ps1_d2t )    = ps1.dist2threshold( ps1_d2t );
+ps.dist2threshold( ps2_d2t )    = ps2.dist2threshold( ps2_d2t );
+ps1_sa = ps1_relays(ps1_relays <= size(ps.state_a, 1));
+ps2_sa = ps2_relays(ps2_relays <= size(ps.state_a, 1));
+ps.state_a( ps1_sa )            = ps1.state_a( ps1_sa );
+ps.state_a( ps2_sa )            = ps2.state_a( ps2_sa );
+ps1_temp = ps1_relays(ps1_relays <= size(ps1.temp, 1));
+ps2_temp = ps2_relays(ps2_relays <= size(ps2.temp, 1));
+ps.temp( ps1_temp )             = ps1.temp( ps1_temp );
+ps.temp( ps2_temp )             = ps2.temp( ps2_temp );
+

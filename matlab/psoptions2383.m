@@ -23,14 +23,14 @@ opt.opf.generator_commitment = 0; % switch generators on/off using MIP
 opt.opf.branch_switching = 0;     % switch branches on/off using MIP
 
 %% other options
-opt.verbose = 1;
+opt.verbose = 0;
 opt.seecascade = 1;
 
 %% time-domain simulation options
 opt.sim.integration_scheme = 1; % 1 = trapezoidal rule, 2 = implicit ode15i, 3 = explicit ode15s
 opt.sim.var_step = true;        % fixed (false) or variable (true) integration step size
 opt.sim.ramp_frac = 0.05;       % fraction of generator allowed to ramp between generations
-opt.sim.writelog  = true;       % write differential and algebraic variables to a file
+opt.sim.writelog  = false;       % write differential and algebraic variables to a file
 opt.sim.dt_default = 1/30;      % default sampling rate (30Hz)
 opt.sim.max_iters = 20;         % default number of newton iterations for trapezoidal solver
 opt.sim.tolerance = 1e-6;       % newton convergence tolerance

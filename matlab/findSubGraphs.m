@@ -13,6 +13,7 @@ function [graphNos,nSubGraphs] = findSubGraphs(nodes_A,links,n_to_find)
 
 [n,dum] = size(nodes_A);
 if n==dum
+    disp( '***** Weirdness!' ); % FIXME: Debugging comment
     A = sparse(nodes_A);
 else
     nodes = nodes_A;

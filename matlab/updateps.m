@@ -2,7 +2,16 @@ function ps = updateps(ps)
 % check for and fix irregular data in a power system data structure
 % see "psconstants" for a description of this structure
 
+% disp( 'Before updateps()' );
+% disp( ps.shunt(:,1) );
+
 C = psconstants;
+
+% [hostetje] Make sure ps has 'blackout' field. Needed for Poland because
+% I don't want to modify the .mat file.
+if ~isfield( ps, 'blackout' )
+    ps.blackout = false;
+end
 
 %% make sure that the matrices are big enough
 % bus
@@ -104,7 +113,15 @@ if any( needs_id )
     max_id = max(max(ps.shunt(:,C.sh.id)),0);
     ps.shunt(needs_id,C.sh.id) = max_id + (1:sum(needs_id))';
 end
-ps.shunt_i = sparse(ps.shunt(:,1),1,(1:size(ps.shunt,1))',max_bus_no,1);
+% [20160112:hostetje] This was clearly intended to be a map from
+% sh.id -> index in ps.shunt, based on usage elsewhere.
+%ps.shunt_i = sparse(ps.shunt(:,1),1,(1:size(ps.shunt,1))',max_bus_no,1);
+max_shunt_no = max(ps.shunt(:,C.sh.id));
+ps.shunt_i = sparse(ps.shunt(:,C.sh.id),1,(1:size(ps.shunt,1))',max_shunt_no,1);
+
+% disp(ps.shunt_i);
+% disp( 'After updateps()' );
+% disp( ps.shunt(:,1) );
 
 %% addcolumns function
 function M = addcolumns(M,ncols)
@@ -112,3 +129,6 @@ function M = addcolumns(M,ncols)
 [n,m] = size(M);
 
 M = [M zeros(n,ncols-m)];
+
+
+

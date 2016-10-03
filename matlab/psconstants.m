@@ -52,14 +52,16 @@ if isempty(C)
     C.bu.delta_sys  = 20; % stores system angle when first bus of island
     C.bu.Vr         = 21; % real portion of complex voltage
     C.bu.Vi         = 22; % imaginary portion of complex voltage
-    
+    C.bu.cols = 22; % minimum number of columns
     % synonyms
     C.bu.locs   = [C.bu.locX C.bu.locY];
     
     % column names
-    C.bu.col_names = {'ID','type','Pd','Qd','Gs','Bs','area','Vmag','Vang','basekV','zone','Vmax','Vmin','lam_P','lam_Q','mu_Vx','mu_Vn','locX','locY','delta_sys'};
-
-	C.bu.cols = 22; % minimum number of columns
+    % hostetje:20151105 added 'Vr' and 'Vi'
+    % hostetje:20151230 changes name strings to match case
+    C.bu.col_names = {'id','type','Pd','Qd','Gs','Bs','area','Vmag','Vang','basekV','zone','Vmax','Vmin','lam_P','lam_Q','mu_Vx','mu_Vn','locX','locY','delta_sys','Vr','Vi'};
+    assert( C.bu.cols == numel(C.bu.col_names) );
+    
 	C.bus = C.bu; % allows us to use C.bus or C.bu
     % default kv
     C.bu.baseKV_default = 230;
@@ -89,10 +91,15 @@ if isempty(C)
     C.br.lineloss = 22; % power loss along a line
     C.br.type   = 23; % branch type
     C.br.id     = 24; % branch id
+    C.br.cols = 24;   % min no. of cols for branch
+    % hostetje:20151105 Added 'prob_fail'
     C.br.col_names = {'from','to','R','X','B','rateA','rateB','rateC','tap','shift','status'...
-        'Pf','Qf','Pt','Qt','mu_f','mu_t','Imag_f','Imag_t','switchable','prob_fail','type','id'};
-
-	C.br.cols = 24;   % min no. of cols for branch
+        'Pf','Qf','Pt','Qt','mu_f','mu_t','Imag_f','Imag_t','switchable','prob_fail','lineloss','type','id'};
+    assert( C.br.cols == numel(C.br.col_names) );
+    
+    % [20160112:hostetje] (Partial?) list of branch fields that can change
+    % during simulation.
+    C.br.var_idx = [C.br.Pf:C.br.Imag_t, C.br.lineloss];
 
 	% short cuts:
 	C.br.f = C.br.from;
@@ -128,11 +135,12 @@ if isempty(C)
     C.ge.ramp_rate_up = 18; % ramp rate up
     C.ge.ramp_rate_down = 19; % down ramp rate
     C.ge.id = 20;
-    
+    C.ge.cols = 20; % min no. of cols
+    % hostetje:20151105 Changed strings to match property names
     C.ge.col_names = {'bus','Pg','Qg','Qmax','Qmin','Vsp','mBase','status','Pmax','Pmin',...
-        'mu_Px','mu_Pn','mu_Qx','mu_Qn','type','cost','part_fact','RRU','RRD','id'};
+        'mu_Pmax','mu_Pmin','mu_Qmax','mu_Qmin','type','cost','part_fact','ramp_rate_up','ramp_rate_down','id'};
     
-	C.ge.cols = 20; % min no. of cols
+    assert( C.ge.cols == numel(C.ge.col_names) );
     % synonyms
     C.gen  = C.ge;
     C.ge.P = C.ge.Pg;
@@ -160,11 +168,12 @@ if isempty(C)
     C.ma.Td0  = 16; % d-axis time constant Td0
     C.ma.Td0p = 17; % d-axis time constant T'd0 (DEBUG ME)
     C.ma.delta = 18; % delta = delta_m + theta_g
+    C.ma.cols = 18;
     
-    C.ma.col_names = {'bus','r','Xd','Xdp','Xdpp','Xq','Xqp','Xqpp','D','M',...
-                      'Ea','Eap','Pm','delta_m','omega','Td0','Td0p'};
+    C.ma.col_names = {'gen','r','Xd','Xdp','Xdpp','Xq','Xqp','Xqpp','D','M',...
+                      'Ea','Eap','Pm','delta_m','omega','Td0','Td0p','delta'};
     
-    C.ma.cols = 17;
+    assert( C.ma.cols == numel(C.ma.col_names) );
     % synonyms
     C.ma.Ea_mag = C.ma.Ea;
     C.mac = C.ma;
@@ -185,6 +194,7 @@ if isempty(C)
     C.ex.E1          =  12;               % Excitation system state variable
     C.ex.cols = 12;
     C.ex.col_names = {'gen','type','Ka','Ta','Tb','Ke','Te','Urmax','Urmin','Vref','Efd','E1'};
+    assert( C.ex.cols == numel(C.ex.col_names) );
     %synonyms
     C.exc = C.ex;
 
@@ -200,9 +210,10 @@ if isempty(C)
     C.go.Pref        =  9;                % Reference Power (pu)
     C.go.Ti          =  10;               % integrator time constant (comes from Ki)
     C.go.P3          =  11;               % integrator time constant (comes from Ki)
-    
     C.go.cols = 11;
+    
     C.go.col_names = {'gen','type','R','Tt','LCmax','LCmin','Pmax','Pmin','Pref','Ti','P3'};
+    assert( C.go.cols == numel(C.go.col_names) );
     %synonyms
     C.gov = C.go;
 
@@ -215,7 +226,7 @@ if isempty(C)
 	C.sh.frac_S = 4; % fraction of the shunt (P/Q) that is constant complex power
 	C.sh.frac_Z = 5; % fraction of the shunt (P/Q) that is constant complex impedance
                      % note that the remainder is constant current (if supported)
-    C.sh.frac_Y = 5; % frac_Y is a synonym for frac_Z
+    C.sh.frac_Y = C.sh.frac_Z; % frac_Y is a synonym for frac_Z
 	C.sh.status = 6; % indicates if the shunt is on or off
 	C.sh.factor = C.sh.status; % status and factor have the same effect
 	% use status with binary control or factor with continuous control
@@ -228,9 +239,46 @@ if isempty(C)
     C.sh.current_Q = 13; % the current reactive load
     C.sh.id     = 14; % unique id number for this shunt element.
 	C.sh.cols   = 14; % minimum number of columns
+    
+    C.sh.col_names = {'bus','P','Q','frac_S','frac_Z','status','type','value',...
+                      'frac_E','gamma','near_gen','current_P','current_Q','id'};
+    
+    % [20160112:hostetje] (Partial?) list of shunt fields that can change
+    % during simulation.
+    C.sh.var_idx = [C.sh.status, C.sh.near_gen, C.sh.current_P, C.sh.current_Q];
+    
+    % hostetje:20151105 Old IDs were not consistent with the columns
+    % specified in 'case9_ps'
+%     C.sh.lambda = 10;
+%     C.sh.gamma = C.sh.lambda; % I'm assuming these are synonyms; 
+%                               % Some code relies on the 'gamma' name
+%     C.sh.frac_dyn = 11;
+%     C.sh.Zst_P = 12;
+%     C.sh.Zlt_P = 13;
+%     C.sh.Zst_Q = 14;
+%     C.sh.Zlt_Q = 15;
+%     C.sh.Tst_P = 16;
+%     C.sh.Tlt_P = 17;
+%     C.sh.Tst_Q = 18;
+%     C.sh.Tlt_Q = 19;
+%     C.sh.alpha_st_P = 20;
+%     C.sh.alpha_lt_P = 21;
+%     C.sh.alpha_st_Q = 22;
+%     C.sh.alpha_lt_Q = 23;
+%     C.sh.near_gen = 24;
+%     C.sh.id = 25;
+%     C.sh.cols = 25;
+%     C.sh.col_names = {'bus', 'P', 'Q', 'frac_S', 'frac_Z', 'status', 'type', ...
+%                       'value', 'frac_E', 'lambda', 'frac_dyn', 'Zst_P', 'Zlt_P', ...
+%                       'Zst_Q', 'Zlt_Q', 'Tst_P', 'Tlt_P', 'Tst_Q', 'Tlt_Q', ... 
+%                       'alpha_st_P', 'alpha_lt_P', 'alpha_st_Q', 'alpha_lt_Q', 'near_gen', 'id'};
+
+    
     % synonyms:   
 	C.shunt     = C.sh; % synonym
-    C.sh.col_names = {'bus','P','Q','frac_S','frac_Z','status','type','value','frac_E','gamma','near_genID','id'};
+    
+
+    assert( C.sh.cols == numel(C.sh.col_names) );
     
     %% event-related definitions
 
@@ -269,7 +317,9 @@ if isempty(C)
     C.event.em_success = 10; % emergency control succeed if 1
     
     C.event.cols = 10;
-    C.event.col_names = {'time','type','bus_loc','branch_loc','gen_loc','shunt_loc','relay_loc','quantity','em_success'};
+    C.event.col_names = {'time','type','bus_loc','branch_loc','gen_loc','shunt_loc','relay_loc','quantity','change_by','em_success'};
+    assert( C.event.cols == numel(C.event.col_names) );
+    
     % synonym
     C.ev = C.event;
     

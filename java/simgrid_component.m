@@ -1,43 +1,17 @@
-function [ps,t_out,X,Y] = simgrid_interval(depth, ps,t,t_next,x0,y0,opt)
-% usage: [ps,t_out,X,Y] = simgrid_interval(ps,t,t_next,x0,y0,opt)
-% integrate PS DAEs from t to t_next, recursively if endogenous events
-%
-% inputs:
-%  ps - power system structure, see psconstants.
-%  t  - initial simulation time.
-%  t_next - end simulation time assuming no relay events.
-%  x0 and y0 - current state of the system
-%  opt - options inherited from simgrid
-%
-% outputs:
-%  ps - the power systems structure at the end of the simulation.
-%   .endo_events   - matrix that logs endogenous events during the simulation.
-%  t_out - vector with times where the system was evaluated at
-%  X and Y - state of the system during the integration period
-
-% memory_data = struct2cell( whos() );
-% whos
-
-C           = psconstants;
-
-fprintf( '>>>>> simgrid_interval( %i, %f, %f )\n', depth, t, t_next );
-fprintf( ' %i', ps.bus( :, C.bu.id ) );
-% memory();
-
-if depth > opt.simgrid_max_recursion
-%     if opt.verbose
-        disp( '! Recursion limit exceeded' );
-%     end
-    [ps, t_out, X, Y] = onBlackout( ps, t, x0, y0 );
-    return;
-end
+function [ps, t_end] = simgrid_component(ps, t,t_next, opt)
+%SIMGRID_COMPONENT Summary of this function goes here
+%   Detailed explanation goes here
 
 % constants and data
+C           = psconstants;
 n           = size(ps.bus,1);
 n_macs      = size(ps.mac,1);
 m           = size(ps.branch,1);
 n_shunts    = size(ps.shunt,1);
 j = 1i;
+
+% [hostetje] t_end == t_next unless there is a relay event
+t_end = t_next;
 
 angle_ref = opt.sim.angle_ref;                 % angle reference: 0:delta_sys,1:delta_coi
 COI_weight = opt.sim.COI_weight;               % weight of center of inertia
@@ -48,34 +22,19 @@ else
     weight     = ps.gen(:,C.ge.mBase);
 end
 
-% check whether the last relay event splitted the system
-br_status           = ps.branch(:,C.br.status) == C.CLOSED;
-is_first_subgraph   = findSubGraphs(ps.bus(:,C.bu.id), ps.branch(br_status,C.br.f:C.br.t),1);
-
-if ~all(is_first_subgraph)
-    % the network partitioned
-    if opt.verbose
-        fprintf('  t = %.4f: The network partitioned into two islands\n',t);
-    end
-    % get ps structures and DAE variables for the two subnets
-    net1 = logical(is_first_subgraph); net2 = ~net1;
-    ps1  = subsetps(ps,net1);   [x01,y01] = get_xy(ps1,opt);
-    ps2  = subsetps(ps,net2);   [x02,y02] = get_xy(ps2,opt);
-
-    % step down a recursion level and solve for the two subnets
-    [ps1,t_out1,X1,Y1] = simgrid_interval(depth+1, ps1,t,t_next,x01,y01,opt);
-    [ps2,t_out2,X2,Y2] = simgrid_interval(depth+1, ps2,t,t_next,x02,y02,opt);
-
-    % aggregate the outputs from the lower recursion levels
-    [ps,t_out,X,Y] = superset_odeout(ps,ps1,ps2,t_out1,t_out2,X1,Y1,X2,Y2,opt);
-elseif ps.blackout || (n_macs == 0 || n_shunts == 0 || (ps.shunt(:,C.sh.P)'*ps.shunt(:,C.sh.factor) == 0) || size(ps.bus(:,1),1) == 1)
+% FIXME: In the single-bus case, it *might* still have a generator and a
+% load
+% ps.blackout ||
+if (n_macs == 0 || n_shunts == 0 ...
+        || (ps.shunt(:,C.sh.P)'*ps.shunt(:,C.sh.factor) == 0) ...
+        || size(ps.bus(:,1),1) == 1)
     if opt.verbose
         fprintf( '  t = %.4f: Blackout or trivial island\n', t );
     end
     
     % there is no generation or load in this network, or it is just one disconnected bus
 %     ps = onBlackout( ps );
-    [ps, t_out, X, Y] = onBlackout( ps, t, x0, y0 );
+    [ps] = onBlackout( ps, t );
 else
     % nothing special (for now), try to integrate the network DAEs from t to t_next
     ix          = get_indices(n,n_macs,m,n_shunts,opt);
@@ -96,7 +55,7 @@ else
     % recalculate algebraic variables according to the updated Ybus
     [ps.Ybus,ps.Yf,ps.Yt,ps.Yft,ps.sh_ft] = getYbus(ps,false);
     try
-        y_new = solve_algebraic(t,x0,y0,ps,opt);
+        y_new = solve_algebraic(t, ps.x, ps.y, ps,opt);
     catch % [hostetje] TODO: Catch particular errors
         y_new = [];
     end
@@ -107,62 +66,30 @@ else
         end
         % remove temp reference bus, if needed
         ps = removeTempRef( ps, temp_ref, ref );
-        [ps, t_out, X, Y] = onBlackout( ps, t, x0, y0 );
+        [ps] = onBlackout( ps, t );
         return;
     end
     
     % we should be able to start integrating the DAE for this subgrid
-    xy0 = [x0;y_new];
+    xy0 = [ps.x; y_new];
     y0 = y_new;
 
     % [20160113:hostetje] Wrapped in try/catch. Solver failure now
     % sets 'ps.blackout' and returns.
     try
-        % choose integration scheme
-        switch opt.sim.integration_scheme
-            case 1
-                % trapezoidal rule
-                clear fn_f; clear fn_g; clear fn_h;
-                fn_f = @(t,x,y) differential_eqs(t,x,y,ps,opt);
-                fn_g = @(t,x,y) algebraic_eqs(t,x,y,ps,opt);
-                fn_h = @(ps, t,xy,dt) endo_event(t,xy,ix,ps,dt,opt);
-                % Note: auxilliary_function() just handles indexing
-                fn_aux= @(local_id,ix) auxiliary_function(local_id,ix,ps,opt);
-                % [20160126:hostetje] Added 'ps' argument
-                [t_ode,X,Y,Z, ps] = solve_dae( ...
-                    ps, fn_f,fn_g,fn_h,fn_aux,x0,y0,t:opt.sim.dt_default:t_next,opt);
-                XY_ode = [X;Y]';
-
-            case 2
-                % implicit, ode15i
-                clear fn_fg;
-                xyp0 = zeros(size(xy0));
-                event_handle = @(t,xy,xyp) endo_event_i(t,xy,xyp,ix,ps);
-                fn_fg = @(t,xy,xyp) differential_algebraic_i(t,xy,xyp,ps,opt);
-                options = odeset(  'Jacobian', @(t,xy,xyp) get_jacobian_i(t,xy,xyp,ps,opt), ...
-                    'Events', event_handle, ...
-                    'Stats','off');
-                [xy0,xyp0]                      = decic(fn_fg,t,xy0,zeros(size(xy0)),xyp0,zeros(size(xyp0)));
-                [t_ode,XY_ode]                  = ode15i(fn_fg,t:opt.sim.dt_default:t_next,xy0,xyp0,options);
-
-            case 3
-                % explicit, ode15s
-                clear fn_fg;
-                event_handle = @(t,xy) endo_event(t,xy,ix,ps);
-                fn_fg = @(t,xy) differential_algebraic(t,xy,ix.nx,ps,opt);
-                mass_matrix = sparse(1:ix.nx,1:ix.nx,1,ix.nx+ix.ny,ix.nx+ix.ny);
-                options = odeset(   'Mass',mass_matrix, ...
-                    'MassSingular','yes', ...
-                    'Jacobian', @(t,xy) get_jacobian(t,xy,ix.nx,ps,opt), ...
-                    'MaxOrder', 2, ...
-                    'BDF', 'off', ...
-                    'Stats','off', ...
-                    'RelTol', 1e-3, ...
-                    'AbsTol', 1e-6, ...
-                    'Events', event_handle, ...
-                    'NormControl','off');
-                [t_ode,XY_ode]                  = ode15s(fn_fg,t:opt.sim.dt_default:t_next,xy0,options);
-        end
+        % trapezoidal rule
+        clear fn_f; clear fn_g; clear fn_h;
+        fn_f = @(t,x,y) differential_eqs(t,x,y,ps,opt);
+        fn_g = @(t,x,y) algebraic_eqs(t,x,y,ps,opt);
+        fn_h = @(ps, t,xy,dt) endo_event(t,xy,ix,ps,dt,opt);
+        % Note: auxilliary_function() just handles indexing
+        fn_aux= @(local_id,ix) auxiliary_function(local_id,ix,ps,opt);
+        % [20160126:hostetje] Added 'ps' argument
+        % Note: 'y0', *not* 'ps.y', because 'y0' seems to be a *list* of
+        % vectors and we don't want to assign that to 'ps.y' yet
+        [t_ode,X,Y,Z, ps] = solve_dae( ...
+            ps, fn_f,fn_g,fn_h,fn_aux, ps.x, y0, t:opt.sim.dt_default:t_next,opt);
+        XY_ode = [X;Y]';
     catch ex
         switch ex.identifier
             case 'Cosmic:NotConverged'
@@ -170,7 +97,7 @@ else
                     fprintf( '  t = %.4f: Cosmic:NotConverged in solve_dae\n', t );
                 end
                 ps = removeTempRef( ps, temp_ref, ref );
-                [ps, t_out, X, Y] = onBlackout( ps, t, x0, y0 );
+                [ps] = onBlackout( ps, t );
                 return;
             otherwise
                 rethrow( ex );
@@ -196,6 +123,10 @@ else
         delta_coi   = sum(weight.*deltas,1)/sum(weight,1);
         delta_m     = deltas - delta_coi - mac_Thetas;   % Revisit this
     end
+    % [hostetje] We completely overwrite x/y because 'ps' is a subgrid and
+    % we will merge it later.
+    ps.x = x_end;
+    ps.y = y_end;
 
     ps.mac(:,C.mac.delta_m)     = delta_m;
     ps.mac(:,C.mac.omega)       = x_end(ix.x.omega_pu)*2*pi*ps.frequency;
@@ -233,7 +164,12 @@ else
     lineloss = Sft + Stf;
     negvalue = real(lineloss)<0;
     lineloss(negvalue) = lineloss(negvalue) * -1;
-    ps.branch(:,C.br.lineloss) = lineloss*ps.baseMVA;
+    % FIXME: [hostetje] in case 39, there is a large discrepancy between
+    % lineloss for the recursive and iterative simulator implementations,
+    % but it occurs only in the imaginary part of 'lineloss' and only on
+    % the branch from bus 2 -> bus 30. As a temporary fix, I assign only
+    % the real part of lineloss to the 'ps' structure.
+    ps.branch(:,C.br.lineloss) = real( lineloss*ps.baseMVA );
 
     % preparation work for the emergency control
     % calculate resulting ZIPE load after the powerflow
@@ -281,26 +217,29 @@ else
         t_event = t_out(end);
         % process reley event
         [ps] = process_relay_event(t_event,relay_event,ps,opt);
-        t_down = t_event + opt.sim.t_eps;
+        % [hostetje] Added min() here to ensure that t_down <= t_next
+%         t_down = min( t_event + opt.sim.t_eps, t_next );
+        % [hostetje] If t_end < t_next, caller will enqueue another
+        % simulation step.
+        t_end = min( t_event + opt.sim.t_eps, t_next );
         % step down a recursive level to continue solving from the event to t_next
-        % [hostetje] TODO: Is it correct to increment 'depth' here, since
-        % the recursive call is being used to solve the rest of the current
-        % interval (and not to partition the network)?
-        [ps,t_out_down,X_down,Y_down] = simgrid_interval(depth+1, ps,t_down,t_next,x_end,y_end,opt);
+        % [hostetje] Note that we call 'simgrid_split()' because the relay
+        % event may have disconnected the network.
+%         [ps] = simgrid_split(depth+1, ps, t_down,t_next, opt);
 
         % merge the outputs from this recursion level and the one immediately below
-        t_out       = [t_out t_out_down];
-        X           = [X X_down];
-        Y           = [Y Y_down];
+%         t_out       = [t_out t_out_down];
+%         X           = [X X_down];
+%         Y           = [Y Y_down];
 
         % reset relay_event as []
         relay_event = []; %#ok<NASGU>
     end
 end % Big if
 
-fprintf( '<- return from %i\n', depth );
+end
 
-end % Function
+% -----------------------------------------------------------------------
 
 function ps = removeTempRef( ps, temp_ref, ref )
     C = psconstants;
@@ -309,16 +248,19 @@ function ps = removeTempRef( ps, temp_ref, ref )
     end
 end
 
-function [ps, t_out, X, Y] = onBlackout( ps, t, x0, y0 )
+function [ps] = onBlackout( ps, t )
     C = psconstants;
     
     % could not solve for the algebraic variables, shut down subgrid
-    t_out           = t;
-    X               = nan(size(x0));
-    if isempty(X) % disconnected bus without mac
-        X = [X; nan(1,size(X,2))];
-    end
-    Y               = nan(size(y0));
+%     t_out           = t;
+%     X               = nan(size(x0));
+%     if isempty(X) % disconnected bus without mac
+%         X = [X; nan(1,size(X,2))];
+%     end
+%     Y               = nan(size(y0));
+    
+    ps.x = nan(size(ps.x));
+    ps.y = nan(size(ps.y));
     
     % [20160111:hostetje] Zero out branch power flow so that we don't
     % have to look in x/y to find out if they're dead.
@@ -337,3 +279,4 @@ function [ps, t_out, X, Y] = onBlackout( ps, t, x0, y0 )
     end
     ps.blackout = true;
 end
+

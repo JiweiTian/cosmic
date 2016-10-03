@@ -104,6 +104,7 @@ while t < t_end
     if discrete
         t = t + opt.sim.t_eps;
     end
+    
     % find the next time interval
     t_next = event(event_no,1);
     % try to simulate between t and t_next

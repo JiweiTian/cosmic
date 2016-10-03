@@ -1,9 +1,10 @@
-function [value,isterminal,direction,Temperature] = endo_event(t,xy,ix,ps,dt,opt)
+function [ps, value,isterminal,direction,Temperature] = endo_event(t,xy,ix,ps,dt,opt)
 % usage: [value,isterminal,direction] = endo_event(t,xy,ix,ps)
 % defines an exogenous event (relay) that will stop the DAE integration
 
 % constants and settings
-global dist2threshold state_a temp
+% [20160126:hostetje] Globals moved to fields of 'ps'
+% global dist2threshold state_a temp
 C = psconstants;
 oc_setting1             = ps.relay(ix.re.oc,C.re.setting1);    % over-current maximum current
 % temp_setting2           = ps.relay(ix.re.temp,C.re.setting2);   
@@ -27,18 +28,20 @@ Imag_f          = abs(If);
 Imag_t          = abs(It);
 Imag            = max(Imag_f, Imag_t);
 
-temp(ps.relay(ix.re.temp,C.re.id),1)  = x(ix.x.temp);   
-temp(ps.relay(ps.branch(:,C.br.status)==0,C.re.id),1) = 0;  % zero out the temperature for the open lines
+ps.temp(ps.relay(ix.re.temp,C.re.id),1)  = x(ix.x.temp);   
+ps.temp(ps.relay(ps.branch(:,C.br.status)==0,C.re.id),1) = 0;  % zero out the temperature for the open lines
 
 if ~isempty(dt)
-    state_a(ps.relay(ix.re.oc,C.re.id)) = max(state_a(ps.relay(ix.re.oc,C.re.id))+(Imag-oc_setting1)*dt+SMALL_EPS, 0);
-    temp(ps.relay(ix.re.temp,C.re.id))  = temp(ps.relay(ix.re.temp,C.re.id)) + (temp_R.*Imag_f.^2 -temp_K.*temp(ps.relay(ix.re.temp,C.re.id)))*dt;
+    ps.state_a(ps.relay(ix.re.oc,C.re.id)) = ...
+        max(ps.state_a(ps.relay(ix.re.oc,C.re.id))+(Imag-oc_setting1)*dt+SMALL_EPS, 0);
+    ps.temp(ps.relay(ix.re.temp,C.re.id))  = ...
+        ps.temp(ps.relay(ix.re.temp,C.re.id)) + (temp_R.*Imag_f.^2 -temp_K.*ps.temp(ps.relay(ix.re.temp,C.re.id)))*dt;
 end
-    Temperature = temp(ps.relay(ix.re.temp,C.re.id)); % temperature in the relay model is reference to ambient temperature
+    Temperature = ps.temp(ps.relay(ix.re.temp,C.re.id)); % temperature in the relay model is reference to ambient temperature
 
-dist2threshold(ps.relay(ix.re.oc,C.re.id)) = ...
-    ps.relay(ix.re.oc,C.re.threshold) - state_a(ps.relay(ix.re.oc,C.re.id)); % associate them with their global id
-dist2threshold(dist2threshold<0)=0;
+ps.dist2threshold(ps.relay(ix.re.oc,C.re.id)) = ...
+    ps.relay(ix.re.oc,C.re.threshold) - ps.state_a(ps.relay(ix.re.oc,C.re.id)); % associate them with their global id
+ps.dist2threshold(ps.dist2threshold<0)=0;
 
 F               = ps.bus_i(ps.branch(:,C.br.from));
 y_apparent      = Imag_f./Vmags(F);

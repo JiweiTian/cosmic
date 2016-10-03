@@ -1,0 +1,19 @@
+function gplot_network( ps )
+%UNTITLED Summary of this function goes here
+%   Detailed explanation goes here
+
+    C = psconstant
+    Nbus = size( ps.bus, 1 );
+    XY = [ps.bus(:, C.
+    
+    A = zeros( Nbus, Nbus );
+    Nbranch = size( ps.branch, 1 );
+    from = ps.branch(:, 1);
+    to = ps.branch(:, 2);
+    for i = 1:Nbranch
+        A(from(i), to(i)) = 1;
+    end
+    
+    
+end
+

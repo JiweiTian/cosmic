@@ -1,14 +1,15 @@
+function [ output_args ] = eduardo_old_39( input_args )
+%EDUARDO_OLD_39 Summary of this function goes here
+%   Detailed explanation goes here
+
 %% simulate 39-bus case
 clear all; close all; clc; C = psconstants;
 
 % do not touch path if we are deploying code
-if ~(ismcc || isdeployed)
-    addpath('../data');
-    addpath('../numerics');
-end
-
-% simulation time
-t_max = 40;
+% if ~(ismcc || isdeployed)
+%     addpath('../data');
+%     addpath('../numerics');
+% end
 
 % select data case to simulate
 ps = updateps(case39_ps);
@@ -55,34 +56,35 @@ ps = update_load_freq_source(ps);
 ps.relay                    = get_relays(ps,'all',opt);
 
 % initialize global variables
-% global t_delay t_prev_check dist2threshold state_a 
+global t_delay t_prev_check dist2threshold state_a 
 n    = size(ps.bus,1);
 ng   = size(ps.mac,1);
 m    = size(ps.branch,1);
 n_sh = size(ps.shunt,1);
 ix   = get_indices(n,ng,m,n_sh,opt);
-% t_delay = inf(size(ps.relay,1),1);
-% t_delay([ix.re.uvls])= opt.sim.uvls_tdelay_ini;
-% t_delay([ix.re.ufls])= opt.sim.ufls_tdelay_ini;
-% t_delay([ix.re.dist])= opt.sim.dist_tdelay_ini;
-% t_delay([ix.re.temp])= opt.sim.temp_tdelay_ini;
-% t_prev_check = nan(size(ps.relay,1),1);
-% dist2threshold = inf(size(ix.re.oc,2)*2,1);
-% state_a = zeros(size(ix.re.oc,2)*2,1);
-ps = init_global( ps, ix, opt );
+t_delay = inf(size(ps.relay,1),1);
+t_delay([ix.re.uvls])= opt.sim.uvls_tdelay_ini;
+t_delay([ix.re.ufls])= opt.sim.ufls_tdelay_ini;
+t_delay([ix.re.dist])= opt.sim.dist_tdelay_ini;
+t_delay([ix.re.temp])= opt.sim.temp_tdelay_ini;
+t_prev_check = nan(size(ps.relay,1),1);
+dist2threshold = inf(size(ix.re.oc,2)*2,1);
+state_a = zeros(size(ix.re.oc,2)*2,1);
 
 %% build an event matrix
-event = zeros(4,C.ev.cols);
+% simulation time
+t_max = 400;
+% scenario = [ [50, 32]; [100, 33]; [200, 24]; [300, 23] ];
+event = zeros(6,C.ev.cols);
 % start
 event(1,[C.ev.time C.ev.type]) = [0 C.ev.start];
 % trip a branch
-event(2,[C.ev.time C.ev.type]) = [3 C.ev.trip_branch];
-event(2,C.ev.branch_loc) = 35;
-% trip a branch
-event(3,[C.ev.time C.ev.type]) = [3 C.ev.trip_branch];
-event(3,C.ev.branch_loc) = 23;
+event(2,[C.ev.time, C.ev.type, C.ev.branch_loc]) = [50,  C.ev.trip_branch, 32];
+event(3,[C.ev.time, C.ev.type, C.ev.branch_loc]) = [100, C.ev.trip_branch, 33];
+event(4,[C.ev.time, C.ev.type, C.ev.branch_loc]) = [200, C.ev.trip_branch, 24];
+event(5,[C.ev.time, C.ev.type, C.ev.branch_loc]) = [300, C.ev.trip_branch, 23];
 % set the end time
-event(4,[C.ev.time C.ev.type]) = [t_max C.ev.finish];
+event(6,[C.ev.time C.ev.type]) = [t_max C.ev.finish];
 
 %% run the simulation
 [outputs,ps] = simgrid(ps,event,'sim_case39',opt);
@@ -163,3 +165,4 @@ ylabel('Temperature ( ^{\circ}C)','Interpreter','tex','FontSize',18);
 xlabel('time (sec.)','FontSize',18);
 
 
+end

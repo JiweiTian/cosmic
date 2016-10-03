@@ -1,4 +1,4 @@
-function ps = subsetps(ps,bus_subset)
+function ps = subsetps(ps,bus_subset, opt)
 % usage: ps = subsetps(ps,bus_subset)
 % subset a power system given the nodes specified in 
 % "subset."  The input "subset" can be either a binary/logical vector
@@ -48,6 +48,14 @@ if isfield(ps,'relay')
     re_keep_sh = ismember(ps.relay(:,C.re.shunt_loc),sh_keep_nos);
     re_keep = re_keep_br | re_keep_bu | re_keep_ge | re_keep_sh;
     ps.relay = ps.relay(re_keep,:);
+    
+    % FIXME: Do the global variables here! Since subsetps() operates on ps
+    % in-place, we don't have to do anything as long as we're satisfied
+    % with copying dense matrices. If we need to save memory, we could make
+    % sparse copies here.
+%     ps.t_delay      = ps.t_delay(re_keep, :);
+%     ps.t_prev_check = ps.t_prev_check(re_keep, :);
+    
 end
 nge = size(ps.gen);
 nsh = size(ps.shunt);
@@ -63,7 +71,13 @@ if ~isempty(ps.gen)
     ps.gen_i = sparse(ps.gen(:,1),1,(1:nge)',max_bus_no,1);
 end
 if ~isempty(ps.shunt)
-    ps.shunt_i = sparse(ps.shunt(:,1),1,(1:nsh)',max_bus_no,1);
+    % [20160112:hostetje] This was clearly intended to be a map from
+    % sh.id -> index in ps.shunt, based on usage elsewhere.
+    %ps.shunt_i = sparse(ps.shunt(:,1),1,(1:nsh)',max_bus_no,1);
+    max_shunt_no = max(ps.shunt(:,C.sh.id));
+    ps.shunt_i = sparse(ps.shunt(:,C.sh.id),1,(1:nsh)',max_shunt_no,1);
 end
 
-
+% [hostetje] Subset the 'x' and 'y' vectors. FIXME: This is the lazy way!
+% [ps.x, ps.y] = get_xy( ps, opt );
+%ps = init_xy( ps, opt );

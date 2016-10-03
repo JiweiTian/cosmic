@@ -1,0 +1,188 @@
+Dependencies:
+	* Matlab 2015b
+	* Optimization Toolbox
+	* Matlab Compiler
+	* Matlab runtime
+	
+Interface:
+	* [ C, ps, opt, t, x, y, event ] = init_xxx()
+	* [ ps, t, x, y, event ] = take_action( ps, opt, t, x, y, event, a, delta_t )
+
+Global variables:
+
+	matlab/endo_event.m:
+		dist2threshold	rw
+		state_a			rw
+		temp			rw		Used as a static local
+	matlab/process_relay_event.m:
+		t_delay			w
+		t_prev_check	w
+	matlab/sim_case*.m
+		t_delay			w
+		t_prev_check	w
+		dist2threshold	w
+		state_a			w
+	numerics/solve_dae.m:
+		t_delay			rw
+		t_prev_check	rw
+		dist2threshold	r
+		
+		
+% [20160126:hostetje] Moved globals to field of 'ps'
+global t_delay t_prev_check dist2threshold state_a
+t_delay 		= Nrelays x 1
+t_prev_check 	= Nrelays x 1
+dist2threshold 	= # "overcurrent relays" x 1
+state_a 		= # "overcurrent relays" x 1
+temp			= Unknown use, initialized to []
+
+ix.re =
+	.uvls		= Under-voltage load shedding
+	.ufls		= Under-frequency load shedding
+	.dist		= "distance relays"
+	.temp		= Temperature
+	.oc			= over-current
+
+% relay index
+index.re.temp   = 1:n_branches;
+index.re.oc = (1:n_branches) + n_branches;
+index.re.uvls = (1:n_shunts) + n_branches + n_branches;
+index.re.ufls = (1:n_shunts)  + n_branches + n_branches + n_shunts;
+index.re.dist = (1:n_branches) + n_branches + n_branches + n_shunts + n_shunts;
+index.re.nrelay = 3*n_branches + 2*n_shunts;
+
+On copying the "global" variables:
+	I think we need to have the full-length vector always, because of the way indexing works. The code expects to be able to use the relay ID as an index into the globals, so they need to be full-length.
+
+	
+=== near_gen mismatch bug ===
+
+0. In every interval, the call sequence is
+	update_load_freq_source()
+	getYbus()
+1. update_load_freq_source() assigns:
+	ps.Ebus = electrical_distance()
+2. electrical_distance() relies on ps.Ybus
+3. The value of ps.Ybus that is seen at this time is the previous value calculated by getYbus (0)
+
+* The Ybus value is not copied back by superset_odeout(), so why does it even have a value during recursive calls to simgrid_interval()?
+	* subsetps() does not compute Ybus for the subsets
+	* If the recursion is not due to a grid partition, then it makes sense because the same Ybus is retained since ps is not a subset
+	=> Due to copy-on-write, sub_ps.Ybus = ps.Ybus until it gets overwritten after update_load_freq_source()
+	
+Solution: Copy Ybus and friends in merge_odeout() only if ps1 is not a subgrid
+
+=== bugs when the grid partitions ===
+
+* There is a single discrepancy in the 'x' vector, in the .temp field for branch 12
+	* Notably, branch 12 is the one that has just tripped due to a relay event
+	* The cause of this is that superset_odeout() initializes x to 0 (see comment for 'y' vector below)
+	=> Solved in merge_odeout()
+* There is a single discrepancy in the y.delta_sys field
+	* The cause of this is that superset_odeout() initializes the y vector to 0 and doesn't copy the delta_sys element, so the 0 is retained
+	=> Solved in merge_odeout()
+* There are many discrepancies in the branch.lineloss column
+* There are many discrepancies in the gov.P3 column
+
+=== x.delta disparity ===
+
+* The new code and the old code disagree on the x.delta elements of (presumably) an entire island. 
+	* get_xy() derives x.delta from ps.mac as:
+		delta       = ps.mac(:,C.ma.delta_m) - delta_sys + theta(mac_bus_i);
+	* ps.mac agrees between new and old code
+	* The fault is due to the next problem:
+* The new code and the old code disagree on y.delta_sys
+	* Both the new and old y.delta_sys are non-zero, so this is different from the previous error with the same element
+	
+=== widespread disparities when a subgrid has a relay event and does not split further ===
+
+* Part of the problem might be that the use of subset_xy() vs. get_xy() is still not correct. The old code calls get_xy() only if a component has split into two new components, but not if a relay event occurs within a component but does not cause a split, even if the component containing the event is actually a subgrid.
+	* We could retain the previous subgrid states so that we can call subset_xy( sub_ps ), at a substantial memory cost
+	=> Better: We retain a boolean flag indicating which _xy() function to use
+
+=== after above changes, discrepancies in near_gen ===
+
+* In the problem case, the grid is partitioned into three components, and then the largest component experiences several relay events that do *not* partition it further
+	* The main ps.Ebus matches because ultimately changes to Ebus are not seen, since the grid is partitioned
+		* Because merge_odeout() is always merging into the main ps, Ebus changes in subgrids are not saved
+	* Within the large component, though, changes to Ebus persist until merging because it gets recursively simulated without partitioning
+	
+=== Indexing into the "relay state" vectors (state_a, dist2threshold, ...) ===
+
+* t_delay and t_prev_check contain one entry for each relay
+
+* dist2threshold has size 2 * #of over-current relays (ix.re.oc)
+	* Indexed with relay ID, used by oc relays
+
+* state_a has size 2 * #of over-current relays (ix.re.oc)
+	* This array is indexed with the ID of the relays, and only for oc relays. Thus the first half of state_a is always 0's.
+
+* temp has size 2 * #of tempreature relays (ix.re.temp)
+	* Indexed by relay ID. The IDs are larger than the initial size of the array, so it gets enlarged implicitly.
+	
+=== Possible sources of ill-conditioned matrix warnings / singular matrix errors ===
+
+Only use of '\' operator is in nrsolve(). Users of nrsolve() are:
+	* solve_algebraic()
+		* returns '[]' if nrsolve.success = false
+	* newpf(), via subgridPowerFlow()
+	
+=== Validation experiments for Cosmic version 2 (per Eduardo, 2016/05/11) ===
+
+newpf():
+	Solve algebraic equations for power flow
+	* Should happen only once at initialization
+t_out:
+	Make sure that the synchronized time series are never actually used for calculations
+	
+Test case:
+	ieee 39:
+		t = 50: trip 32
+		t = 100: trip 33
+		t = 200: trip 24
+		t = 300: trip 23
+		T = 400
+	Plot:
+		omega pu
+		
+	ieee 9:
+		Plot temperature and omega pu
+		
+	
+=== AIRES Experiments ===
+
+aires-op_2.0.jar: Re-implemented Cosmic as an iterative algorithm
+aires-op_2.1.jar: Stopped using 'subset_xy()' in the new implementation
+
+ieee39_nothing_2: aires-op_2.0.jar
+	Re-running ieee39_nothing_1 with new Cosmic implementation
+	
+poland_nothing_2: aires-op_2.1.jar
+	Re-running poland_nothing_1 with new Cosmic implementation
+	
+v2_ieee39_szi_1:
+	
+v2_poland_szi_1: aires-op_2.3.jar / aires-op_2.4.jar
+
+	v2_poland_ps_szi_1_127 -> poland_nothing_2_799			Island(1)@10	> Nothing
+	v2_poland_ps_szi_1_212 -> poland_nothing_2_884			Island(2)@10	> Nothing		Note: NaN@12 reward in nothing case
+	
+	Successful:
+		v2_poland_ps_szi_1_104
+		v2_poland_ps_szi_1_107
+		v2_poland_ps_szi_1_109
+		v2_poland_ps_szi_1_124
+		v2_poland_ps_szi_1_127
+		v2_poland_ps_szi_1_130 ?
+		v2_poland_ps_szi_1_178
+		v2_poland_ps_szi_1_212
+		v2_poland_ps_szi_1_219
+		v2_poland_ps_szi_1_233
+		v2_poland_ps_szi_1_264
+		v2_poland_ps_szi_1_265
+		
+		What's the deal with v2_poland_ps_szi_1_27 ?
+	
+	v2_poland_ps_szi_1_130.csv.sh.o5161292
+		The output file is missing lines or they got written out of order
+	
