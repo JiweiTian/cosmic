@@ -185,4 +185,13 @@ v2_poland_szi_1: aires-op_2.3.jar / aires-op_2.4.jar
 	
 	v2_poland_ps_szi_1_130.csv.sh.o5161292
 		The output file is missing lines or they got written out of order
+		
+rts96_nothing_1: aires-op_2.5.jar
+	RTS96 with no control for all N-2 faults
+	
+	Selected 3x500 crossvalidation folds uniformly at random from cases where
+	blackout occurred at 11 <= t <= 310.
+	
+rts96_f0_ps_szi_1: aires-op_2.6.jar
+	rts96_fold0 cases with policy rollout, ShedZone.Island
 	

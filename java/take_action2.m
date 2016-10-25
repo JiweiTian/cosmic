@@ -56,5 +56,16 @@ function [ psprime ] = take_action2( ps, opt, t, a, delta_t )
     C = psconstants;
     psprime.branch(psprime.branch(:,C.br.status)==0, C.br.var_idx) = 0;
     psprime.shunt(psprime.shunt(:,C.sh.status)==0, C.sh.var_idx)   = 0;
+	
+	% [20161025:hostetje] Random load fluctuations
+	if opt.random.loads
+		disp( 'Randomizing loads...' );
+		active = psprime.shunt(:, C.sh.factor) > 0;
+		Nactive = sum( active );
+		r = normrnd( 0, sqrt(opt.random.load_variance), Nactive, 1 );
+		% Add random perturbation and ensure result is in bounds
+		psprime.shunt(active, C.sh.factor) = ...
+			max( 0, min( opt.random.load_max, psprime.shunt(active, C.sh.factor) + r ) );
+	end
 end
 

@@ -1,11 +1,11 @@
-function [t_steps,X,Y,Z] = solve_dae(f,g,h,aux,x0,y0,t_span,opt)
+function [t_steps,X,Y,Z, ps] = solve_dae(ps, f,g,h,aux,x0,y0,t_span,opt)
 % usage: [t_steps,X,Y,Z] = solve_dae(f,g,h,aux,x0,y0,t_span,opt)
 % this function uses the first order trapezoidal rule to solve
 % the dae defined by the following:
 %
 %  f - the differential variables
 %  g - the algebraic variables
-%  h - the integer variables
+%  h - the integer variables [ps, t, xy, dt] -> [ps, value,isterminal,direction,Temperature]
 %  aux - the glocal id for relays or ix depends on the inputs
 %  x0 - the initial set of differential variables
 %  y0 - the initial set of algebraic variables
@@ -17,7 +17,8 @@ if nargin<8, opt = numerics_options; end;
 if isempty(h), check_discrete=false; else check_discrete=true; end
 Z = [];
 
-global t_delay t_prev_check dist2threshold 
+% [20160126:hostetje] Moved globals to field of 'ps'.
+% global t_delay t_prev_check dist2threshold 
 
 % constants, sizes and defaults
 max_newton_its  = opt.sim.max_iters; % maximum number of newton iterations
@@ -48,7 +49,7 @@ t_steps = t0;
 % get the initial state of the dae system
 f0 = f(t0,x0,y0);
 if check_discrete
-    z0 = h(t0,xy0,[]);
+    [ps, z0] = h(ps, t0,xy0,[]); % [20160127:hostetje] Added 'ps' return
     z0_prev = z0; % initialize z0_prev as z0
 end
 
@@ -91,7 +92,9 @@ while t0<t_final
         % bail out if we are at max number of iterations
         if newton_it == max_newton_its
 %             break
-            error(' time step did not converge...');
+            % [20160107:hostetje] Don't change/remove the error code at 
+            % the beginning of the message.
+            error('Cosmic:NotConverged', 'time step did not converge...');
         end
         
         % build the jacobian that will be used in Newton's method
@@ -102,6 +105,12 @@ while t0<t_final
         
         % find the search direction
         p = -(jacobian\trapz_mismatch);
+        % [hostetje] FIXME: Should we do these checks now? Currently we
+        % just catch exceptions in simgrid_interval.
+%         [~, warnid] = lastwarn;
+%         if strcmp( warnid, 'MATLAB:singularMatrix' ) 
+%         elseif strcmp( warnid, 'MATLAB:nearlySingularMatrix' )
+%         end
         % implement the backstepping to get the Newton step size
         alpha = alpha_0;
         while 1
@@ -117,11 +126,17 @@ while t0<t_final
 %                 fprintf('Newton step completed.\n');
                 break
             else
-                fprintf('Reducing Newton step size.\n');
+                if opt.verbose % hostetje: Disable logging
+					fprintf('Reducing Newton step size.\n');
+                end
                 alpha = alpha/2;
             end
             if alpha<min_alpha
-                fprintf('Algorithm failure in the newton step.\n');
+                if opt.verbose % hostetje: Disable logging
+					fprintf('Algorithm failure in the newton step.\n');
+                end
+                % [20160113:hostetje] Throw error on failure
+                error( 'Cosmic:NotConverged', 'alpha < min_alpha' );
                 return
             end
         end
@@ -135,7 +150,7 @@ while t0<t_final
     % check if a threshold was crossed
     if check_discrete
         xy1 = [x1;y1];
-        z1 = h(t1,xy1,[]);
+        [ps, z1] = h(ps, t1,xy1,[]); % [20160127:hostetje] Added 'ps' return
         % check to see if we hit a threshold
         ix              = aux([],1);
         hit_thresh = abs(z1)<opt.sim.eps_thresh;
@@ -171,7 +186,7 @@ while t0<t_final
         % adjust dt in case dt is greater than the remaining t_delay
         if any(down_crossed(1:ix.re.nrelay))
             crossed = down_crossed(1:ix.re.nrelay);
-            t_remain = t_delay(aux(crossed,0));
+            t_remain = ps.t_delay(aux(crossed,0));
             if dt > max(min(t_remain),dt_min/5)
                 dt = max(min(t_remain),dt_min/5);
                 solution_good = false;
@@ -201,7 +216,9 @@ while t0<t_final
         % if it converged and no events, then save t1, x1 and y1; advance
         t_prev      = t0;
         t0          = t1;           % commit time advance
-        [z1,~,~,Temperature] = h(t1,xy1,dt);          % compute dist2threshold and update state_a
+        [ps, z1,~,~,Temperature] = h(ps, t1,xy1,dt);          % compute dist2threshold and update state_a
+                                                    % [20160127:hostetje]
+                                                    % Added 'ps' return
         
         if ~isempty(dt_next)
             dt          = dt_next;
@@ -237,8 +254,8 @@ while t0<t_final
             for i = 1:n_relay
                 % if the trace has never acrossed its threshold or its t_prev_check has
                 % been restored, t_prev_check is NaN
-                if isnan(t_prev_check(aux(rows(i),0)))
-                    t_prev_check(aux(rows(i),0)) = t_prev;
+                if isnan(ps.t_prev_check(aux(rows(i),0)))
+                    ps.t_prev_check(aux(rows(i),0)) = t_prev;
                 end
             end
             % when it is below threshold, reduce the time delay until it hits 0
@@ -248,19 +265,19 @@ while t0<t_final
                 n_stay_crossed = size(stay_crossed,1);
                 for i = 1:n_stay_crossed
                     if ismember(stay_crossed(i),[ix.re.oc])
-                        t_delay(aux(stay_crossed(i),0)) = dist2threshold(aux(stay_crossed(i),0))/(-z1(stay_crossed(i)));
+                        ps.t_delay(aux(stay_crossed(i),0)) = ps.dist2threshold(aux(stay_crossed(i),0))/(-z1(stay_crossed(i)));
                     else
-                        int = t1 - t_prev_check(aux(stay_crossed(i),0));
-                        t_delay(aux(stay_crossed(i),0)) = t_delay(aux(stay_crossed(i),0)) - int; % reduce its time delay according to its global id
-                        t_prev_check(aux(stay_crossed(i),0)) = t1;
+                        int = t1 - ps.t_prev_check(aux(stay_crossed(i),0));
+                        ps.t_delay(aux(stay_crossed(i),0)) = ps.t_delay(aux(stay_crossed(i),0)) - int; % reduce its time delay according to its global id
+                        ps.t_prev_check(aux(stay_crossed(i),0)) = t1;
                     end
                 end
                 % when t_delay = 0, break and process this event
-                if any(t_delay(aux(stay_crossed,0))<=0)
-                    tripped = stay_crossed(t_delay(aux(stay_crossed,0))<=0);
+                if any(ps.t_delay(aux(stay_crossed,0))<=0)
+                    tripped = stay_crossed(ps.t_delay(aux(stay_crossed,0))<=0);
                     Z = false(size(relay_event,1),1);
                     Z(tripped) = true;
-                    t_delay(t_delay<0)=0;
+                    ps.t_delay(ps.t_delay<0)=0;
                     break
                 end
             end
@@ -274,21 +291,21 @@ while t0<t_final
                 n_stay_crossed = size(stay_crossed,1);
                 for j = 1:n_stay_crossed
                     if ~ismember(stay_crossed(j),[ix.re.oc])
-                        if ~isnan(t_prev_check(aux(stay_crossed(j),0)))
-                            int = t1 - t_prev_check(aux(stay_crossed(j),0));
-                            t_delay(aux(stay_crossed(j),0)) = t_delay(aux(stay_crossed(j),0)) + int; % incease its time delay according to its global id
-                            t_prev_check(aux(stay_crossed(j),0)) = t1;
+                        if ~isnan(ps.t_prev_check(aux(stay_crossed(j),0)))
+                            int = t1 - ps.t_prev_check(aux(stay_crossed(j),0));
+                            ps.t_delay(aux(stay_crossed(j),0)) = ps.t_delay(aux(stay_crossed(j),0)) + int; % incease its time delay according to its global id
+                            ps.t_prev_check(aux(stay_crossed(j),0)) = t1;
                             % when t_delay restores to initial value, set the
                             % previous check time back to NaN
                             if ismember(stay_crossed(j),[ix.re.uvls])
-                                if t_delay(aux(stay_crossed(j),0)) >= opt.sim.uvls_tdelay_ini
-                                    t_delay(aux(stay_crossed(j),0)) = opt.sim.uvls_tdelay_ini;
-                                    t_prev_check(aux(stay_crossed(j),0)) = nan;
+                                if ps.t_delay(aux(stay_crossed(j),0)) >= opt.sim.uvls_tdelay_ini
+                                    ps.t_delay(aux(stay_crossed(j),0)) = opt.sim.uvls_tdelay_ini;
+                                    ps.t_prev_check(aux(stay_crossed(j),0)) = nan;
                                 end
                             elseif ismember(stay_crossed(j),[ix.re.ufls])
-                                if t_delay(aux(stay_crossed(j),0)) >= opt.sim.ufls_tdelay_ini
-                                    t_delay(aux(stay_crossed(j),0)) = opt.sim.ufls_tdelay_ini;
-                                    t_prev_check(aux(stay_crossed(j),0)) = nan;
+                                if ps.t_delay(aux(stay_crossed(j),0)) >= opt.sim.ufls_tdelay_ini
+                                    ps.t_delay(aux(stay_crossed(j),0)) = opt.sim.ufls_tdelay_ini;
+                                    ps.t_prev_check(aux(stay_crossed(j),0)) = nan;
                                 end
                             end
                         end
