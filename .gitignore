@@ -1,2 +1,4 @@
+# Output directory for build
+dist/
 
 *.csv

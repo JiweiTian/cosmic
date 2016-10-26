@@ -1,4 +1,4 @@
-function [ psprime ] = take_action2( ps, opt, t, a, delta_t )
+function [ psprime ] = take_action2( context, ps, opt, t, a, delta_t )
 %TAKE_ACTION Executes a single action and then simulates 'delta_t' forward.
 %   This is essentially an adaptation of the part of 'simgrid.m' that
 %   calls 'simgrid_interval.m'. We've changed it so that it doesn't expect
@@ -59,13 +59,16 @@ function [ psprime ] = take_action2( ps, opt, t, a, delta_t )
 	
 	% [20161025:hostetje] Random load fluctuations
 	if opt.random.loads
-		disp( 'Randomizing loads...' );
-		active = psprime.shunt(:, C.sh.factor) > 0;
-		Nactive = sum( active );
-		r = normrnd( 0, sqrt(opt.random.load_variance), Nactive, 1 );
-		% Add random perturbation and ensure result is in bounds
-		psprime.shunt(active, C.sh.factor) = ...
-			max( 0, min( opt.random.load_max, psprime.shunt(active, C.sh.factor) + r ) );
+		temp = rng( opt.random.gen.(context).state );
+		
+		Pr = normrnd( 0, opt.random.load_Psigma );
+		psprime.shunt(:, C.sh.P) = ...
+			max( opt.random.load_Pmin, min( opt.random.load_Pmax, psprime.shunt(:, C.sh.P) + Pr ) );
+		Qr = normrnd( 0, opt.random.load_Qsigma );
+		psprime.shunt(:, C.sh.Q) = ...
+			max( opt.random.load_Qmin, min( opt.random.load_Qmax, psprime.shunt(:, C.sh.Q) + Qr ) );
+			
+		rng( temp );
 	end
 end
 

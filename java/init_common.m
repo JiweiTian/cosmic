@@ -31,5 +31,15 @@ function [ps, index, opt] = init_common( C, ps, opt, jopt )
     index   = get_indices(n,ng,m,n_sh,opt);
     % [20160126:hostetje] Globals now stored as field of 'ps'
     ps = init_global( ps, index, opt );
+	
+	%% Compute baselines for power fluctuation
+	if opt.random.loads
+		opt.random.load_Psigma	= opt.random.load_sigma	* ps.shunt(:, C.sh.P);
+		opt.random.load_Pmin	= opt.random.load_min	* ps.shunt(:, C.sh.P);
+		opt.random.load_Pmax	= opt.random.load_max	* ps.shunt(:, C.sh.P);
+		opt.random.load_Qsigma	= opt.random.load_sigma	* ps.shunt(:, C.sh.Q);
+		opt.random.load_Qmin	= opt.random.load_min	* ps.shunt(:, C.sh.Q);
+		opt.random.load_Qmax	= opt.random.load_max	* ps.shunt(:, C.sh.Q);
+	end
 end
 
