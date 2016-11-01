@@ -148,6 +148,16 @@ Test case:
 	ieee 9:
 		Plot temperature and omega pu
 		
+=== Random relay event delays ===
+
+Approach:
+	x Maintain ps.event_queue
+	x Modify process_relay_event() so that it pushes relay events into ps.event_queue instead of calling process_event() immediately
+		* Still need to do the other logic because it prevents the same relay event from being generated more than once
+	x In simulate_component(), return the event time so that the caller can resume
+	x simulate_transition() checks the ps.event_queue to determine t_next in the call to simulate_component()
+		* simulate_component() then returns at the appropriate time, and simulate_transition() calls process_event() for the next relay event in the queue
+	
 	
 === AIRES Experiments ===
 

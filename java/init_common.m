@@ -3,6 +3,7 @@ function [ps, index, opt] = init_common( C, ps, opt, jopt )
 %   Detailed explanation goes here
 
     opt = apply_jopt( opt, jopt );
+	ps.event_queue = java.util.LinkedList;
     
     % FIXME: [hostetje] Debugging code
     fprintf( 'Matlab root: ''%s''\n', matlabroot );

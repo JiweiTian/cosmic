@@ -20,6 +20,9 @@ function [ opt ] = apply_jopt( opt, jopt )
 	opt.random.load_min		= jopt.random.load_min;
 	opt.random.load_max		= jopt.random.load_max;
 	opt.random.load_sigma	= jopt.random.load_sigma;
+	% TODO: Initialize from 'jopt'
+	opt.random.relays		= jopt.random.relays;
+	opt.random.relay_mu		= jopt.random.relay_mu;
     % TODO: Make these configurable in Java
     warning( 'off', 'backtrace' );
     warning( 'off', 'verbose' );

@@ -62,6 +62,28 @@ for i = 1:num_relay
     end
 
     if new_event(i,C.ev.type)~=0
-        ps = process_event(ps,new_event(i,:),opt);
+        % ps = process_event(ps,new_event(i,:),opt);
+		
+		if opt.random.relays
+			% [hostetje] The 'stats' toolbox (which contains exprnd()) doesn't
+			% work on the cluster, possibly due to platform incompatibility. Since
+			% we only work with simple distributions, the easiest thing is to just
+			% write the sampling code ourselves.
+			r = -opt.random.relay_mu * log(rand());
+			% r = exprnd( opt.random.relay_mu );
+			new_event(i, C.ev.time) = new_event(i, C.ev.time) + r;
+		end
+		
+		if new_event(i, C.ev.branch_loc) ~= 0
+			q = {'branch', new_event(i, C.ev.branch_loc), new_event(i, :)};
+		elseif new_event(i, C.ev.shunt_loc) ~= 0
+			q = {'shunt', new_event(i, C.ev.shunt_loc), new_event(i, :)};
+		end
+		
+		fprintf( 'process_relay_event: Enqueue %s %d ->', q{1}, q{2} );
+		fprintf( ' %f', q{3} );
+		fprintf( '\n' );
+
+		ps.event_queue.add( q );
     end
 end
