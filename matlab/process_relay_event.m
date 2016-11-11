@@ -32,10 +32,12 @@ for i = 1:num_relay
 
     elseif relay_type(i) == C.relay.uvls
         new_event(i,C.ev.time) = t_event;
-        loc = find(ps.shunt(:,C.sh.bus)==relay_location(i));
-        if ps.shunt(loc,C.sh.P) > 0 && ps.shunt(loc,C.sh.status) > 0;
+		% [hostetje] Altering 'shunt_loc' to be 'sh.id' (was index in ps.shunt)
+        idx = find(ps.shunt(:,C.sh.bus)==relay_location(i));
+		sh_id = ps.shunt(idx, C.sh.id);
+        if ps.shunt(idx,C.sh.P) > 0 && ps.shunt(idx,C.sh.status) > 0;
             new_event(i,C.ev.type) = C.ev.uvls_relay;
-            new_event(i,C.ev.shunt_loc) = loc;
+            new_event(i,C.ev.shunt_loc) = sh_id;
             new_event(i,C.ev.change_by) = 1;     % 1 = by percentage, 0 = by amount
             new_event(i,C.ev.quantity) = opt.sim.uvls_delta;
             if opt.verbose, fprintf('  t = %.4f: UVLS relay trip at bus %d...\n',t_event,relay_location(i)); end
@@ -47,10 +49,12 @@ for i = 1:num_relay
 
     elseif relay_type(i) == C.relay.ufls
         new_event(i,C.ev.time) = t_event;
-        loc = find(ps.shunt(:,C.sh.bus)==relay_location(i));
-        if ps.shunt(loc,C.sh.P) > 0 && ps.shunt(loc,C.sh.status) > 0;
+        % [hostetje] Altering 'shunt_loc' to be 'sh.id' (was index in ps.shunt)
+        idx = find(ps.shunt(:,C.sh.bus)==relay_location(i));
+		sh_id = ps.shunt(idx, C.sh.id);
+        if ps.shunt(idx,C.sh.P) > 0 && ps.shunt(idx,C.sh.status) > 0;
             new_event(i,C.ev.type) = C.ev.ufls_relay;
-            new_event(i,C.ev.shunt_loc) = loc;
+            new_event(i,C.ev.shunt_loc) = sh_id;
             new_event(i,C.ev.change_by) = 1;     % 1 = by percentage, 0 = by amount
             new_event(i,C.ev.quantity) = opt.sim.ufls_delta;
             if opt.verbose, fprintf('  t = %.4f: UFLS relay trip at bus %d...\n',t_event,relay_location(i)); end

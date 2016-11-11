@@ -51,7 +51,7 @@ switch event(C.ev.type)
         ps.branch(br_set,C.br.status) = 0;
         % trip gens and shunts at this bus
         ps.gen(ps.gen(:,1)==bus_no,C.gen.status) = 0;
-        ps.shunt(ps.shunt(:,1)==bus_no,C.shunt.status) = 0;
+        ps.shunt(ps.shunt(:,C.sh.bus)==bus_no,C.shunt.status) = 0;
         discrete = true;
         if verbose, fprintf('  t = %.4f: Bus %d tripped...\n',t,bus_no); end
         
@@ -68,28 +68,30 @@ switch event(C.ev.type)
         
     case C.ev.shed_load
         shunt_id = event(C.ev.shunt_loc);
+		shunt_ix = ps.shunt_i( shunt_id );
         change_by = event(C.ev.change_by);
-        prev_load = ps.shunt(shunt_id,C.sh.P).*ps.shunt(shunt_id,C.sh.factor);
+        prev_load = ps.shunt(shunt_ix,C.sh.P).*ps.shunt(shunt_ix,C.sh.factor);
         if change_by
-            ps.shunt(shunt_id,C.sh.factor) = max(ps.shunt(shunt_id,C.sh.factor) - event(C.ev.quantity), 0);
-            curr_load = ps.shunt(shunt_id,C.sh.P).*ps.shunt(shunt_id,C.sh.factor);
+            ps.shunt(shunt_ix,C.sh.factor) = max(ps.shunt(shunt_ix,C.sh.factor) - event(C.ev.quantity), 0);
+            curr_load = ps.shunt(shunt_ix,C.sh.P).*ps.shunt(shunt_ix,C.sh.factor);
             discrete = true;
-            bus_no = ps.shunt(shunt_id,1);
+            bus_no = ps.shunt(shunt_ix,1);
             if opt.verbose, fprintf('  t = %.4f: %.2f MW of load shedding at bus %d...\n',t,prev_load-curr_load,bus_no); end
         else
             curr_load = max(prev_load - event(C.ev.quantity),0);
-            ps.shunt(shunt_id,C.sh.P) = max(ps.shunt(shunt_id,C.sh.P)-event(C.ev.quantity),0);
-            ps.shunt(shunt_id,C.sh.Q) = max(ps.shunt(shunt_id,C.sh.Q)-event(C.ev.quantity),0);
+            ps.shunt(shunt_ix,C.sh.P) = max(ps.shunt(shunt_ix,C.sh.P)-event(C.ev.quantity),0);
+            ps.shunt(shunt_ix,C.sh.Q) = max(ps.shunt(shunt_ix,C.sh.Q)-event(C.ev.quantity),0);
             discrete = true;
-            bus_no = ps.shunt(shunt_id,1);
+            bus_no = ps.shunt(shunt_ix, C.sh.bus);
             if opt.verbose, fprintf('  t = %.4f: %.2f MW of load shedding at bus %d...\n',t,prev_load-curr_load,bus_no); end
         end
         
     case C.ev.trip_shunt
         shunt_id = event(C.ev.shunt_loc);
-        bus_no = ps.shunt(shunt_id,1);
-        if ps.shunt(shunt_id,C.sh.status) ~= 0
-            ps.shunt(shunt_id,C.sh.status) = 0;
+		shunt_ix = ps.shunt_i( shunt_id );
+        bus_no = ps.shunt(shunt_ix, C.sh.bus);
+        if ps.shunt(shunt_ix,C.sh.status) ~= 0
+            ps.shunt(shunt_ix,C.sh.status) = 0;
             discrete = true;
             % output the branch id
             if verbose, fprintf('  t = %.4f: shunt %d at bus %d tripped...\n',t,shunt_id,bus_no); end
@@ -97,10 +99,10 @@ switch event(C.ev.type)
         
     case C.ev.close_shunt
         shunt_id = event(C.ev.shunt_loc);
-        shunt_id = ps.shunt_i(shunt_id);
-        bus_no = ps.shunt(shunt_id,1);
-        if ps.shunt(shunt_id,C.sh.status) ~= 1
-            ps.shunt(shunt_id,C.sh.status) = 1;
+        shunt_ix = ps.shunt_i(shunt_id);
+        bus_no = ps.shunt(shunt_ix, C.sh.bus);
+        if ps.shunt(shunt_ix,C.sh.status) ~= 1
+            ps.shunt(shunt_ix,C.sh.status) = 1;
             discrete = true;
             % output the branch id
             if verbose, fprintf('  t = %.4f: Branch %d at bus %d closed...\n',t,shunt_id,bus_no); end
@@ -134,38 +136,40 @@ switch event(C.ev.type)
         end
     case C.ev.uvls_relay
         shunt_id = event(C.ev.shunt_loc);
+		shunt_ix = ps.shunt_i(shunt_id);
         change_by = event(C.ev.change_by);
-        prev_load = ps.shunt(shunt_id,C.sh.P).*ps.shunt(shunt_id,C.sh.factor);
+        prev_load = ps.shunt(shunt_ix,C.sh.P).*ps.shunt(shunt_ix,C.sh.factor);
         if change_by
-            ps.shunt(shunt_id,C.sh.factor) = max(ps.shunt(shunt_id,C.sh.factor) - event(C.ev.quantity), 0);
-            curr_load = ps.shunt(shunt_id,C.sh.P).*ps.shunt(shunt_id,C.sh.factor);
+            ps.shunt(shunt_ix,C.sh.factor) = max(ps.shunt(shunt_ix,C.sh.factor) - event(C.ev.quantity), 0);
+            curr_load = ps.shunt(shunt_ix,C.sh.P).*ps.shunt(shunt_ix,C.sh.factor);
             discrete = true;
-            bus_no = ps.shunt(shunt_id,1);
+            bus_no = ps.shunt(shunt_ix, C.sh.bus);
             if opt.verbose, fprintf('  t = %.4f: %.2f MW of load shedding at bus %d...\n',t,prev_load-curr_load,bus_no); end
         else
             curr_load = max(prev_load - event(C.ev.quantity),0);
-            ps.shunt(shunt_id,C.sh.P) = max(ps.shunt(shunt_id,C.sh.P)-event(C.ev.quantity),0);
-            ps.shunt(shunt_id,C.sh.Q) = max(ps.shunt(shunt_id,C.sh.Q)-event(C.ev.quantity),0);
+            ps.shunt(shunt_ix,C.sh.P) = max(ps.shunt(shunt_ix,C.sh.P)-event(C.ev.quantity),0);
+            ps.shunt(shunt_ix,C.sh.Q) = max(ps.shunt(shunt_ix,C.sh.Q)-event(C.ev.quantity),0);
             discrete = true;
-            bus_no = ps.shunt(shunt_id,1);
+            bus_no = ps.shunt(shunt_ix, C.sh.bus);
             if opt.verbose, fprintf('  t = %.4f: %.2f MW of load shedding at bus %d...\n',t,prev_load-curr_load,bus_no); end
         end
     case C.ev.ufls_relay
         shunt_id = event(C.ev.shunt_loc);
+		shunt_ix = ps.shunt_i(shunt_id);
         change_by = event(C.ev.change_by);
-        prev_load = ps.shunt(shunt_id,C.sh.P).*ps.shunt(shunt_id,C.sh.factor);
+        prev_load = ps.shunt(shunt_ix,C.sh.P).*ps.shunt(shunt_ix,C.sh.factor);
         if change_by
-            ps.shunt(shunt_id,C.sh.factor) = max(ps.shunt(shunt_id,C.sh.factor) - event(C.ev.quantity), 0);
-            curr_load = ps.shunt(shunt_id,C.sh.P).*ps.shunt(shunt_id,C.sh.factor);
+            ps.shunt(shunt_ix,C.sh.factor) = max(ps.shunt(shunt_ix,C.sh.factor) - event(C.ev.quantity), 0);
+            curr_load = ps.shunt(shunt_ix,C.sh.P).*ps.shunt(shunt_ix,C.sh.factor);
             discrete = true;
-            bus_no = ps.shunt(shunt_id,1);
+            bus_no = ps.shunt(shunt_ix, C.sh.bus);
             if opt.verbose, fprintf('  t = %.4f: %.2f MW of load shedding at bus %d...\n',t,prev_load-curr_load,bus_no); end
         else
             curr_load = max(prev_load - event(C.ev.quantity),0);
-            ps.shunt(shunt_id,C.sh.P) = max(ps.shunt(shunt_id,C.sh.P)-event(C.ev.quantity),0);
-            ps.shunt(shunt_id,C.sh.Q) = max(ps.shunt(shunt_id,C.sh.Q)-event(C.ev.quantity),0);
+            ps.shunt(shunt_ix,C.sh.P) = max(ps.shunt(shunt_ix,C.sh.P)-event(C.ev.quantity),0);
+            ps.shunt(shunt_ix,C.sh.Q) = max(ps.shunt(shunt_ix,C.sh.Q)-event(C.ev.quantity),0);
             discrete = true;
-            bus_no = ps.shunt(shunt_id,1);
+            bus_no = ps.shunt(shunt_ix, C.sh.bus);
             if opt.verbose, fprintf('  t = %.4f: %.2f MW of load shedding at bus %d...\n',t,prev_load-curr_load,bus_no); end
         end
         

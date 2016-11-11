@@ -5,6 +5,9 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
 %   an "end" event, as this is handled by Java.
 
     psprime = ps;
+	psprime.event_queue = java.util.LinkedList;
+	psprime.event_queue.addAll( ps.event_queue );
+	
 	optprime = opt;
     tprime = t;
     %% Execute action
