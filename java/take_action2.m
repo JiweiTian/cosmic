@@ -4,9 +4,6 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
 %   calls 'simgrid_interval.m'. We've changed it so that it doesn't expect
 %   an "end" event, as this is handled by Java.
 
-	%% Push RNG state and resume from the random stream for 'context'
-	old_rng = rng( opt.random.gen.(context).state );
-
     psprime = ps;
 	optprime = opt;
     tprime = t;
@@ -22,7 +19,7 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
 
     %% step through the simulation
     %t_end = min( t + delta_t, event(end, 1) );
-    t_end = tprime + delta_t; % No 'end' event
+    t_end = t + delta_t; % No 'end' event
     while tprime < t_end
         % find the next time interval
 %         t_next = min( t_end, event(event_no,1) );
@@ -35,7 +32,13 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
         % [hostetje] This take_action calls 'simulate_transition()', which 
         % is a re-implementation of 'simgrid_interval()' that does *not*
         % attempt to preserve the original behavior.
-        psprime = simulate_transition( psprime, t, t_next, optprime );
+		if opt.random.relays
+			old_rng = rng( opt.random.gen.(context).relays );
+			psprime = simulate_transition( psprime, tprime, t_next, optprime );
+			opt.random.gen.(context).relays = rng( old_rng );
+		else
+			psprime = simulate_transition( psprime, tprime, t_next, optprime );
+		end
 
 %         fprintf( 'Shunts:\n' );
 %         disp(ps.shunt);
@@ -63,6 +66,9 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
 	
 	% [20161025:hostetje] Random load fluctuations
 	if optprime.random.loads
+		% Push RNG
+		old_rng = rng( opt.random.gen.(context).loads );
+	
 		% [hostetje] The 'stats' toolbox (which contains normrnd()) doesn't
 		% work on the cluster, possibly due to platform incompatibility. Since
 		% we only work with simple distributions, the easiest thing is to just
@@ -78,9 +84,9 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
 			max( optprime.random.load_Pmin, min( optprime.random.load_Pmax, psprime.shunt(:, C.sh.P) + Pr ) );
 		psprime.shunt(:, C.sh.Q) = ...
 			max( optprime.random.load_Qmin, min( optprime.random.load_Qmax, psprime.shunt(:, C.sh.Q) + Qr ) );
+			
+		% Pop RNG
+		optprime.random.gen.(context).loads = rng( old_rng );
 	end
-	
-	%% Save RNG state for 'context' and pop back to old RNG
-	optprime.random.gen.(context).state = rng( old_rng );
 end
 

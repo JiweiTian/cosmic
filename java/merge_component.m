@@ -7,6 +7,11 @@ function [ps] = merge_component( ps, ps1, opt )
 % places we need to synchronize 'ps1' with 'ps', instead of with 'ps2' as
 % the old code does.
 
+% !!! since event_queue is a reference to a Java object, when it gets copied
+% by subsetps() the sub_ps ends up with a reference to the same queue. Thus we
+% don't need to do any copying.
+%ps.event_queue = ps1.event_queue;
+
 C = psconstants;
 angle_ref = opt.sim.angle_ref;                 % angle reference: 0:delta_sys,1:delta_coi
 

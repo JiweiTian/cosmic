@@ -35,7 +35,7 @@ if isfield(ps,'gov'), ps.gov = ps.gov(ge_keep,:); end
 
 % subset the shunts
 if isfield(ps,'shunt')
-    sh_keep = ismember(ps.shunt(:,1),bus_nos);
+    sh_keep = ismember(ps.shunt(:,C.sh.bus),bus_nos);
     sh_keep_nos = ps.shunt(sh_keep,C.sh.bus);
     ps.shunt = ps.shunt(sh_keep,:);
 end

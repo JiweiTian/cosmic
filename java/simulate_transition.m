@@ -124,6 +124,10 @@ while ~comp_queue.isEmpty()
     [sub_ps.x, sub_ps.y] = get_xy( sub_ps, opt );
     
 	% Do simulation to next event time
+	if comp_t >= t_ev
+		fprintf( 'cosmic: WARNING: comp_t (%f) >= t_ev (%f)\n', comp_t, t_ev );
+	end
+	comp_t = min( comp_t, t_ev );
     [sub_ps, t_end] = simulate_component( sub_ps, comp_t, t_ev, opt );
     
 	% Update global state
@@ -142,7 +146,8 @@ while ~comp_queue.isEmpty()
         end
 	
 		% Keep same component index, 0 indicates that subgrid did not split
-		comp_queue.add( [comp, t_end + opt.sim.t_eps, 0] );
+		comp_queue.add( [comp, t_end, 0] );
+		% comp_queue.add( [comp, t_end + opt.sim.t_eps, 0] );
 	elseif ~isempty(min_idx)
 		% Simulation reached t_ev. If there were events, then process them,
 		% check for grid splitting, and reschedule all sub-components. If there
@@ -183,7 +188,8 @@ while ~comp_queue.isEmpty()
             fprintf( '\n' );
         end
         for i = 1:Nsub_components
-            comp_queue.add( [i + Ncomponents, t_end + opt.sim.t_eps, sub_partitioned] );
+			comp_queue.add( [i + Ncomponents, t_end, sub_partitioned] );
+            % comp_queue.add( [i + Ncomponents, t_end + opt.sim.t_eps, sub_partitioned] );
         end
         
         % Adjust component indices so they are unique

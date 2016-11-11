@@ -211,7 +211,10 @@ else
         % [hostetje] Added min() here to ensure that t_down <= t_next
         % [hostetje] If t_end < t_next, caller will enqueue another
         % simulation step.
-        t_end = min( t_event + opt.sim.t_eps, t_next );
+		% [hostetje] It's not clear to me why we need to add 'eps' here, and
+		% it might be causing the t > t_end bug.
+		t_end = min( t_event, t_next );
+        % t_end = min( t_event + opt.sim.t_eps, t_next );
     end
 end % Big if
 
