@@ -7,8 +7,26 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
     psprime = ps;
 	psprime.event_queue = java.util.LinkedList;
 	psprime.event_queue.addAll( ps.event_queue );
+	C = psconstants;
+	
+	% FIXME: Debugging code
+	% if opt.verbose
+		% disp( '----- BEFORE -----' );
+		% disp( psprime.shunt(:, C.sh.current_P) );
+		% disp( psprime.shunt(:, C.sh.factor) );
+	% end
 	
 	optprime = opt;
+	if opt.verbose
+		fprintf( 'take_action2(): context = %s\n', context );
+	end
+	if strcmp('deterministic', context)
+		optprime.random.loads = false;
+		optprime.random.relays = false;
+	% else
+		% optprime.random.loads = true;
+		% optprime.random.relays = true;
+	end
     tprime = t;
     %% Execute action
     % We're using the Event mechanism to implement actions
@@ -35,10 +53,10 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
         % [hostetje] This take_action calls 'simulate_transition()', which 
         % is a re-implementation of 'simgrid_interval()' that does *not*
         % attempt to preserve the original behavior.
-		if opt.random.relays
-			old_rng = rng( opt.random.gen.(context).relays );
+		if optprime.random.relays
+			old_rng = rng( optprime.random.gen.(context).relays );
 			psprime = simulate_transition( psprime, tprime, t_next, optprime );
-			opt.random.gen.(context).relays = rng( old_rng );
+			optprime.random.gen.(context).relays = rng( old_rng );
 		else
 			psprime = simulate_transition( psprime, tprime, t_next, optprime );
 		end
@@ -63,14 +81,13 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
     
     % [20160112:hostetje] Ensure that open branches/shunts are zero'd out
     % even if simulation failed
-    C = psconstants;
     psprime.branch(psprime.branch(:,C.br.status)==0, C.br.var_idx) = 0;
     psprime.shunt(psprime.shunt(:,C.sh.status)==0, C.sh.var_idx)   = 0;
 	
 	% [20161025:hostetje] Random load fluctuations
 	if optprime.random.loads
 		% Push RNG
-		old_rng = rng( opt.random.gen.(context).loads );
+		old_rng = rng( optprime.random.gen.(context).loads );
 	
 		% [hostetje] The 'stats' toolbox (which contains normrnd()) doesn't
 		% work on the cluster, possibly due to platform incompatibility. Since
@@ -91,5 +108,12 @@ function [ psprime, optprime ] = take_action2( context, ps, opt, t, a, delta_t )
 		% Pop RNG
 		optprime.random.gen.(context).loads = rng( old_rng );
 	end
+	
+	% FIXME: Debugging code
+	% if opt.verbose
+		% disp( '----- AFTER -----' );
+		% disp( psprime.shunt(:, C.sh.current_P) );
+		% disp( psprime.shunt(:, C.sh.factor) );
+	% end
 end
 

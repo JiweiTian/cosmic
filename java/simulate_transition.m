@@ -124,7 +124,7 @@ while ~comp_queue.isEmpty()
     [sub_ps.x, sub_ps.y] = get_xy( sub_ps, opt );
     
 	% Do simulation to next event time
-	if comp_t >= t_ev
+	if comp_t > t_ev
 		fprintf( 'cosmic: WARNING: comp_t (%f) >= t_ev (%f)\n', comp_t, t_ev );
 	end
 	comp_t = min( comp_t, t_ev );
@@ -171,7 +171,9 @@ while ~comp_queue.isEmpty()
 			
 			% Apply the event
 			% Note: process_event() insists on having a *row* vector for the event
-			process_event( ps, min_ev(3)', opt );
+			% FIXME: I'VE DELIBERATELY PUT THE BUG BACK!!!
+			ps = process_event( ps, min_ev(3)', opt ); % <- Correct
+			% process_event( ps, min_ev(3)', opt ); % <- INCORRECT!!!
 		end
         
         % Compute new connected components

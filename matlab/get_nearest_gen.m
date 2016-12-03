@@ -56,9 +56,13 @@ all_gens = nan(n_gen_limit,2);
 all_gens(:,1) = nearestGen(1,1:n_gen_limit)';
 all_gens_loc = ismember(mac_buses,all_gens(:,1));
 
-if isempty(all_gens_loc)
+if sum(all_gens_loc) == 0 % [hostetje] Used to be: isempty(all_gens_loc)
     all_gens(:,2) = NaN;
 else
+	% FIXME: Debugging code
+	% disp( 'all_gens_loc' );
+	% disp( all_gens_loc );
+
     all_gens(:,2) = ps.mac(all_gens_loc,C.ma.M);     % C.ge.Pg if there's no machine data
 end
 [~,near_large_gen_index] = max(all_gens(:,2));

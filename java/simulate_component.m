@@ -192,6 +192,9 @@ else
         error('zipe load model matrix is not the right size');
     end
 
+	% ps.shunt(:,C.sh.current_P) = real(S_zipe(ps.shunt(:,C.sh.type)==1))* ps.baseMVA ;
+    % ps.shunt(:,C.sh.current_Q) = imag(S_zipe(ps.shunt(:,C.sh.type)==1))* ps.baseMVA ;
+	
     % [20160107:hostetje] Fixed indexing error: needed to translate
     % shunt id to bus id when looking in 'S_zipe'
     ps.shunt(:,C.sh.current_P) = ...
